@@ -9,8 +9,6 @@ from quart import Quart, request, render_template, jsonify
 
 import cv2
 from av import VideoFrame
-import time
-import requests
 
 from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack
 from aiortc.contrib.media import MediaBlackhole, MediaPlayer, MediaRecorder
@@ -118,9 +116,8 @@ async def offer():
 
     # prepare local media
     player = MediaPlayer(os.path.join(ROOT, "demo-instruct.wav"))
-    if args.write_audio:
-        # recorder = MediaRecorder(args.write_audio)
-        recorder = MediaRecorder('rtmp://localhost:1935/app/live', format='flv', )
+    if args.stream:
+        recorder = MediaRecorder('rtmp://localhost:1935/app/live', format='flv')
     else:
         recorder = MediaBlackhole()
 
@@ -187,7 +184,7 @@ if __name__ == "__main__":
         "--port", type=int, default=8080, help="Port for HTTP server (default: 8080)"
     )
     parser.add_argument("--verbose", "-v", action="count")
-    parser.add_argument("--write-audio", help="Write received audio to a file")
+    parser.add_argument("--stream", help="Write received audio to a file")
     args = parser.parse_args()
 
     if args.verbose:
