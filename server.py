@@ -1,6 +1,6 @@
 import argparse
 import asyncio
-import json
+import atexit
 import logging
 import os
 import ssl
@@ -8,8 +8,9 @@ import uuid
 from quart import Quart, request, render_template, jsonify
 
 import cv2
-from aiohttp import web
 from av import VideoFrame
+import time
+import requests
 
 from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack
 from aiortc.contrib.media import MediaBlackhole, MediaPlayer, MediaRecorder
@@ -87,9 +88,13 @@ class VideoTransformTrack(VideoStreamTrack):
 
 @app.route('/')
 async def index():
-    # content = open(os.path.join(ROOT, "index.html"), "r").read()
-    # return web.Response(content_type="text/html", text=content)
     return await render_template('index.html')
+
+
+@app.route('/show', methods=['POST'])
+async def show():
+    data = await request.get_json()
+    print(data)
 
 
 async def javascript(request):
@@ -114,7 +119,8 @@ async def offer():
     # prepare local media
     player = MediaPlayer(os.path.join(ROOT, "demo-instruct.wav"))
     if args.write_audio:
-        recorder = MediaRecorder(args.write_audio)
+        # recorder = MediaRecorder(args.write_audio)
+        recorder = MediaRecorder('rtmp://localhost:1935/app/live', format='flv', )
     else:
         recorder = MediaBlackhole()
 
@@ -144,6 +150,7 @@ async def offer():
                 track, transform=params["video_transform"]
             )
             pc.addTrack(local_video)
+            recorder.addTrack(track)
 
         @track.on("ended")
         async def on_ended():
@@ -159,16 +166,12 @@ async def offer():
     await pc.setLocalDescription(answer)
 
     return jsonify({"sdp": pc.localDescription.sdp, "type": pc.localDescription.type})
-    # return web.Response(
-    #     content_type="application/json",
-    #     text=json.dumps(
-    #         {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type}
-    #     ),
-    # )
 
 
-async def on_shutdown(app):
+@atexit.register
+async def on_shutdown():
     # close peer connections
+    loop = asyncio.get_event_loop()
     coros = [pc.close() for pc in pcs]
     await asyncio.gather(*coros)
     pcs.clear()
@@ -199,10 +202,4 @@ if __name__ == "__main__":
         ssl_context = None
 
     app.run(ssl_context=ssl_context)
-    # app = web.Application()
-    # app.on_shutdown.append(on_shutdown)
-    # app.router.add_get("/", index)
-    # app.router.add_get("/client.js", javascript)
-    # app.router.add_post("/offer", offer)
-    # web.run_app(app, access_log=None, port=args.port, ssl_context=ssl_context)
 
